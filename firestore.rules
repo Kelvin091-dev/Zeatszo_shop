@@ -1,0 +1,49 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isShopOwner(shopId) {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/shops/$(shopId)).data.ownerId == request.auth.uid;
+    }
+    
+    match /users/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    match /shops/{shopId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isShopOwner(shopId);
+      
+      match /products/{productId} {
+        allow read: if true;
+        allow write: if isShopOwner(shopId);
+      }
+      
+      match /stats/{statId} {
+        allow read: if isShopOwner(shopId);
+        allow write: if false;
+      }
+    }
+    
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && (
+        resource.data.customerId == request.auth.uid ||
+        isShopOwner(resource.data.shopId)
+      );
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        resource.data.customerId == request.auth.uid ||
+        isShopOwner(resource.data.shopId)
+      );
+      allow delete: if isShopOwner(resource.data.shopId);
+    }
+  }
+}
