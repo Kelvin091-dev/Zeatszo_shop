@@ -1,6 +1,7 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 class NotificationService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
@@ -57,12 +58,12 @@ class NotificationService {
         });
       }
     } catch (e) {
-      print('Error registering device token: $e');
+      debugPrint('Error registering device token: $e');
     }
   }
 }
 
 @pragma('vm:entry-point')
 Future<void> _handleBackgroundMessage(RemoteMessage message) async {
-  print('Background message: ${message.messageId}');
+  debugPrint('Background message: ${message.messageId}');
 }

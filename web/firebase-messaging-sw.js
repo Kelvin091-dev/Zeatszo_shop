@@ -1,6 +1,8 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
+// TODO: Replace these placeholder values with your actual Firebase configuration
+// Run 'flutterfire configure' and copy the values from lib/firebase_options.dart
 firebase.initializeApp({
   apiKey: "YOUR_API_KEY",
   authDomain: "YOUR_AUTH_DOMAIN",
