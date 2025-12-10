@@ -1,10 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/order.dart';
+import '../models/order.dart' as model;
 
 class OrderService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Stream<List<Order>> getShopOrders(String shopId, {OrderStatus? statusFilter}) {
+  Stream<List<model.Order>> getShopOrders(String shopId, {model.OrderStatus? statusFilter}) {
     Query query = _firestore.collection('orders').where('shopId', isEqualTo: shopId).orderBy('createdAt', descending: true);
     
     if (statusFilter != null) {
@@ -12,15 +12,15 @@ class OrderService {
     }
 
     return query.snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => Order.fromFirestore(doc)).toList();
+      return snapshot.docs.map((doc) => model.Order.fromFirestore(doc)).toList();
     });
   }
 
-  Future<Order?> getOrderById(String orderId) async {
+  Future<model.Order?> getOrderById(String orderId) async {
     try {
       final doc = await _firestore.collection('orders').doc(orderId).get();
       if (doc.exists) {
-        return Order.fromFirestore(doc);
+        return model.Order.fromFirestore(doc);
       }
       return null;
     } catch (e) {
@@ -28,11 +28,11 @@ class OrderService {
     }
   }
 
-  Future<void> updateOrderStatus(String orderId, OrderStatus newStatus) async {
+  Future<void> updateOrderStatus(String orderId, model.OrderStatus newStatus) async {
     try {
       final updates = <String, dynamic>{'status': newStatus.name};
       
-      if (newStatus == OrderStatus.completed) {
+      if (newStatus == model.OrderStatus.completed) {
         updates['completedAt'] = FieldValue.serverTimestamp();
       }
 
@@ -45,7 +45,7 @@ class OrderService {
   Future<void> cancelOrder(String orderId, String reason) async {
     try {
       await _firestore.collection('orders').doc(orderId).update({
-        'status': OrderStatus.cancelled.name,
+        'status': model.OrderStatus.cancelled.name,
         'cancelReason': reason,
         'completedAt': FieldValue.serverTimestamp(),
       });
@@ -54,7 +54,7 @@ class OrderService {
     }
   }
 
-  Future<List<Order>> getOrdersByDateRange(String shopId, DateTime start, DateTime end) async {
+  Future<List<model.Order>> getOrdersByDateRange(String shopId, DateTime start, DateTime end) async {
     try {
       final snapshot = await _firestore
           .collection('orders')
@@ -64,7 +64,7 @@ class OrderService {
           .orderBy('createdAt', descending: true)
           .get();
 
-      return snapshot.docs.map((doc) => Order.fromFirestore(doc)).toList();
+      return snapshot.docs.map((doc) => model.Order.fromFirestore(doc)).toList();
     } catch (e) {
       rethrow;
     }
