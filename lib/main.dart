@@ -24,7 +24,7 @@ class ShopkeeperApp extends StatefulWidget {
 }
 
 class _ShopkeeperAppState extends State<ShopkeeperApp> {
-  ThemeMode _themeMode = ThemeMode.system;
+  final ThemeMode _themeMode = ThemeMode.system;
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
