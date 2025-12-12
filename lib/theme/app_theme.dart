@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
@@ -32,7 +32,7 @@ class AppTheme {
         ),
         textTheme: textTheme(Brightness.light),
         appBarTheme: const AppBarTheme(backgroundColor: AppColors.primary, foregroundColor: Colors.white, elevation: 0),
-        cardTheme: const CardThemeData(color: AppColors.secondaryBackground, elevation: 2, margin: EdgeInsets.all(8)),
+        cardTheme: const CardTheme(color: AppColors.secondaryBackground, elevation: 2, margin: EdgeInsets.all(8)),
       );
   static ThemeData get dark => ThemeData(
         useMaterial3: false,
