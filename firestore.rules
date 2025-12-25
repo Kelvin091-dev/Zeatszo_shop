@@ -1,49 +1,158 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    function isAuthenticated() {
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // HELPER FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// Returns true if the user is authenticated
+    function isSignedIn() {
       return request.auth != null;
     }
-    
+
+    /// Returns true if the authenticated user is the shop owner
+    /// shopId must equal the user's UID
     function isShopOwner(shopId) {
-      return isAuthenticated() && 
-             get(/databases/$(database)/documents/shops/$(shopId)).data.ownerId == request.auth.uid;
+      return isSignedIn() && request.auth.uid == shopId;
     }
-    
-    match /users/{userId} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
-      allow write: if isAuthenticated() && request.auth.uid == userId;
+
+    /// Returns true if the authenticated user owns the order (is the customer)
+    function isOrderCustomer() {
+      return isSignedIn() && request.auth.uid == resource.data.userId;
     }
-    
+
+    /// Returns true if the authenticated user is the shop that received the order
+    function isOrderShop() {
+      return isSignedIn() && request.auth.uid == resource.data.shopId;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SHOPS COLLECTION
+    // Structure: shops/{shopId}
+    //            shops/{shopId}/profile/info        - Shop profile data
+    //            shops/{shopId}/chickenPricing/data - Pricing data
+    //            shops/{shopId}/meta/onboarding     - Onboarding status (legacy)
+    //
+    // Root document fields:
+    //   shopId, shopName, address, phone, shopImageUrl,
+    //   chickenPricePerKg, stockKg, productImageUrl,
+    //   isProfileCompleted, isPricingCompleted, isActive,
+    //   createdAt, updatedAt
+    // ═══════════════════════════════════════════════════════════════════════════
+
     match /shops/{shopId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isShopOwner(shopId);
-      
-      match /products/{productId} {
-        allow read: if true;
-        allow write: if isShopOwner(shopId);
-      }
-      
-      match /stats/{statId} {
-        allow read: if isShopOwner(shopId);
-        allow write: if false;
+      // WRITE: Only shop owner can write their own shop document
+      allow write: if isShopOwner(shopId);
+
+      // READ: 
+      // - Shop owner can always read their own document
+      // - Any authenticated user can read ACTIVE shops (for user app listing)
+      allow read: if isShopOwner(shopId) 
+        || (isSignedIn() && resource.data.isActive == true);
+
+      // Allow access to all subcollections under the shop
+      // This covers:
+      // - profile/info (shop details)
+      // - chickenPricing/data (pricing)
+      // - meta/onboarding (onboarding status - legacy)
+      // - any future subcollections
+      match /{subCollection}/{docId} {
+        allow read, write: if isShopOwner(shopId);
       }
     }
-    
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ORDERS COLLECTION (Main orders)
+    // Structure: orders/{orderId}
+    // Fields: shopId, userId, status, price, quantity, createdAt, completedAt
+    // ═══════════════════════════════════════════════════════════════════════════
+
     match /orders/{orderId} {
-      allow read: if isAuthenticated() && (
-        resource.data.customerId == request.auth.uid ||
-        isShopOwner(resource.data.shopId)
-      );
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (
-        resource.data.customerId == request.auth.uid ||
-        isShopOwner(resource.data.shopId)
-      );
-      allow delete: if isShopOwner(resource.data.shopId);
+      // Anyone signed in can CREATE an order (customer placing order)
+      allow create: if isSignedIn();
+
+      // READ: Customer can see their own orders, Shop can see orders assigned to them
+      allow read: if isSignedIn() 
+        && (request.auth.uid == resource.data.shopId 
+            || request.auth.uid == resource.data.userId);
+
+      // UPDATE: Only the shop owner can update (e.g., mark as completed)
+      // Validates that shopId matches the authenticated user
+      allow update: if isSignedIn() 
+        && request.auth.uid == resource.data.shopId;
+
+      // DELETE: No one can delete orders (audit trail)
+      allow delete: if false;
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PENDING ORDERS COLLECTION (Shop-specific references)
+    // Structure: pendingOrders/{shopId}/orders/{orderId}
+    // This collection stores references to pending orders for quick access
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    match /pendingOrders/{shopId} {
+      // Shop owner can read their pending orders container
+      allow read: if isShopOwner(shopId);
+
+      match /orders/{orderId} {
+        // Shop owner can read their own pending order references
+        allow read: if isShopOwner(shopId);
+
+        // System/User can create pending order references
+        // (when customer places an order, it creates a reference here)
+        allow create: if isSignedIn();
+
+        // Shop owner can delete (remove from pending when completing)
+        allow delete: if isShopOwner(shopId);
+
+        // No updates needed - just create/delete
+        allow update: if false;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COMPLETED ORDERS COLLECTION (Shop-specific references)
+    // Structure: completedOrders/{shopId}/orders/{orderId}
+    // This collection stores references to completed orders for quick access
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    match /completedOrders/{shopId} {
+      // Shop owner can read their completed orders container
+      allow read: if isShopOwner(shopId);
+
+      match /orders/{orderId} {
+        // Shop owner can read/create completed order references
+        allow read: if isShopOwner(shopId);
+
+        // Shop owner can create (when marking order as completed)
+        allow create: if isShopOwner(shopId);
+
+        // No updates or deletes - completed orders are permanent
+        allow update, delete: if false;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // USERS COLLECTION (Optional - if you store user profiles)
+    // Structure: users/{userId}
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    match /users/{userId} {
+      // Users can read/write their own profile
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+      
+      // Shops can read user data (for order details)
+      allow read: if isSignedIn();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CATCH-ALL: Deny everything else by default
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    // Any collection not explicitly matched above is denied by default
+    // This is implicit in Firestore but good to be aware of
   }
 }
+
