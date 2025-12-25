@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "44774909114",
+    "project_id": "zeatszo-23d2d",
+    "storage_bucket": "zeatszo-23d2d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:44774909114:android:38cfc63437ce550b96ce83",
+        "android_client_info": {
+          "package_name": "com.example.zeatzso_shop"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqTXGZBWw_odKrEoWo-9Yc2WC1_y2FutQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:44774909114:android:27187cb11592ec3096ce83",
+        "android_client_info": {
+          "package_name": "com.mycompany.zeatszo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqTXGZBWw_odKrEoWo-9Yc2WC1_y2FutQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
