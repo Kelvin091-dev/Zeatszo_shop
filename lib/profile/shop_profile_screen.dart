@@ -5,6 +5,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 
 import '../auth/auth_service.dart';
 import '../services/shop_service.dart';
@@ -39,17 +41,123 @@ class ShopProfileScreen extends StatefulWidget {
 
 class _ShopProfileScreenState extends State<ShopProfileScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _addressController = TextEditingController();
 
   String? _name;
-  String? _address;
   String? _phone;
   XFile? _selectedImage;
 
   bool _isSaving = false;
   bool _isLoggingOut = false;
+  bool _isFetchingLocation = false;
 
   /// Returns true if shopId is valid and user is logged in
   bool get _hasValidShopId => widget.shopId.isNotEmpty;
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    super.dispose();
+  }
+
+  /// Fetches current location and appends it to the address field
+  Future<void> _fetchCurrentLocation() async {
+    setState(() {
+      _isFetchingLocation = true;
+    });
+
+    try {
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception('Location services are disabled. Please enable them in settings.');
+      }
+
+      // Check location permission
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception('Location permission denied. Please grant location access.');
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception('Location permissions are permanently denied. Please enable them in settings.');
+      }
+
+      // Get current position
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      // Reverse geocode to get address
+      String locationText;
+      try {
+        List<Placemark> placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+
+        if (placemarks.isNotEmpty) {
+          final place = placemarks.first;
+          final parts = [
+            place.street,
+            place.locality,
+            place.administrativeArea,
+            place.postalCode,
+            place.country,
+          ].where((p) => p != null && p.isNotEmpty).join(', ');
+          
+          locationText = parts.isNotEmpty 
+              ? parts 
+              : 'Lat: ${position.latitude.toStringAsFixed(6)}, Long: ${position.longitude.toStringAsFixed(6)}';
+        } else {
+          locationText = 'Lat: ${position.latitude.toStringAsFixed(6)}, Long: ${position.longitude.toStringAsFixed(6)}';
+        }
+      } catch (e) {
+        // If geocoding fails, use lat/long
+        locationText = 'Lat: ${position.latitude.toStringAsFixed(6)}, Long: ${position.longitude.toStringAsFixed(6)}';
+      }
+
+      // Append location to the address field
+      final currentText = _addressController.text.trim();
+      final newText = currentText.isEmpty
+          ? '📍 Current Location: $locationText'
+          : '$currentText\n📍 Current Location: $locationText';
+
+      setState(() {
+        _addressController.text = newText;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Location fetched successfully'),
+            backgroundColor: AppTheme.success,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to fetch location: $e'),
+            backgroundColor: AppTheme.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isFetchingLocation = false;
+        });
+      }
+    }
+  }
 
   /// FIXED: Document path must have EVEN segments (collection/doc/collection/doc)
   /// 
@@ -184,7 +292,9 @@ class _ShopProfileScreenState extends State<ShopProfileScreen> {
       final currentData = currentSnap?.data() ?? <String, dynamic>{};
 
       final name = _name ?? currentData['name'] as String?;
-      final address = _address ?? currentData['address'] as String?;
+      final address = _addressController.text.trim().isNotEmpty 
+          ? _addressController.text.trim()
+          : (currentData['address'] as String?);
       final phone = _phone ?? currentData['phone'] as String?;
 
       final imageUrl = await _uploadImageIfNeeded() ??
@@ -380,6 +490,11 @@ class _ShopProfileScreenState extends State<ShopProfileScreen> {
           final currentPhone = data['phone'] as String?;
           final currentImageUrl = data['imageUrl'] as String?;
 
+          // Initialize address controller with current address if not already set
+          if (_addressController.text.isEmpty && currentAddress != null && currentAddress.isNotEmpty) {
+            _addressController.text = currentAddress;
+          }
+
           return SingleChildScrollView(
             padding: const EdgeInsets.all(AppTheme.spacingM),
             child: Form(
@@ -533,20 +648,53 @@ class _ShopProfileScreenState extends State<ShopProfileScreen> {
                         ),
                         const SizedBox(height: AppTheme.spacingM),
                         TextFormField(
+                          controller: _addressController,
                           key: ValueKey('address_${currentAddress ?? ''}'),
-                          initialValue: currentAddress ?? '',
-                          decoration: const InputDecoration(
-                            labelText: 'Address',
-                            prefixIcon: Icon(Icons.location_on),
+                          decoration: InputDecoration(
+                            labelText: 'Shop Address',
+                            prefixIcon: const Icon(Icons.location_on),
+                            suffixIcon: Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: _isFetchingLocation
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(12.0),
+                                      child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                    )
+                                  : TextButton.icon(
+                                      onPressed: _fetchCurrentLocation,
+                                      icon: const Icon(
+                                        Icons.my_location,
+                                        size: 16,
+                                      ),
+                                      label: Text(
+                                        'Get Location',
+                                        style: Theme.of(context).textTheme.labelSmall,
+                                      ),
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                    ),
+                            ),
                           ),
-                          maxLines: 2,
+                          maxLines: 3,
+                          minLines: 2,
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
                               return 'Enter address';
                             }
                             return null;
                           },
-                          onSaved: (value) => _address = value?.trim(),
                         ),
                         const SizedBox(height: AppTheme.spacingM),
                         TextFormField(
