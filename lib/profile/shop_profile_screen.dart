@@ -672,9 +672,9 @@ class _ShopProfileScreenState extends State<ShopProfileScreen> {
                                         Icons.my_location,
                                         size: 16,
                                       ),
-                                      label: const Text(
+                                      label: Text(
                                         'Get Location',
-                                        style: TextStyle(fontSize: 11),
+                                        style: Theme.of(context).textTheme.labelSmall,
                                       ),
                                       style: TextButton.styleFrom(
                                         padding: const EdgeInsets.symmetric(
