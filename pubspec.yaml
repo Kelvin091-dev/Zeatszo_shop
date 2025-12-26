@@ -51,6 +51,10 @@ dependencies:
   # Image picker for selecting product images
   image_picker: ^1.1.2
 
+  # Location services for fetching current location
+  geolocator: ^13.0.2
+  geocoding: ^3.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
